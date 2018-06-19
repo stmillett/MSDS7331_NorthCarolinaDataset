@@ -1,7 +1,7 @@
 
 # coding: utf-8
 
-# # Minilab 2
+# # Lab 2
 # 
 # <b>Class:</b> MSDS 7331 Data Mining
 # <br> <b>Dataset:</b> Belk Endowment Educational Attainment Data 
@@ -18,12 +18,12 @@
 #Set global variables
 #Number of features we will be selecting for feature selection
 
-N_FEATURES_OPTIONS = [25 , 50, 100, 200, 300]
+N_FEATURES_OPTIONS = [2, 25 , 50]
 
 
 #Alpha and C we will be using for our classifiers
 
-C_OPTIONS = [1e-4, 1e-3, 1e-2, 1e-1, 1e0, 1e1, 1e2, 1e3, 1e4]
+C_OPTIONS = [1e-2, 1e-1, 1e0, 1e1, 1e2]
 
 
 #Import data all necessary libraries we will be using in our estimation
@@ -31,43 +31,45 @@ C_OPTIONS = [1e-4, 1e-3, 1e-2, 1e-1, 1e0, 1e1, 1e2, 1e3, 1e4]
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from pandas.plotting import scatter_matrix
 import seaborn as sns
 import math
 import re
+import sklearn
 import statistics
-from sklearn.linear_model import LogisticRegression
-from sklearn.linear_model import SGDClassifier
-from sklearn.model_selection import KFold
 
+
+from umap.umap_ import UMAP
+from sklearn.manifold import TSNE
 from sklearn.decomposition import PCA, NMF
-from sklearn.feature_selection import SelectKBest, chi2, SelectPercentile
+from sklearn.feature_selection import SelectKBest, chi2, SelectPercentile, RFE
 
-from sklearn.feature_selection import RFE
+from sklearn.preprocessing import StandardScaler, Binarizer
 
+from sklearn.linear_model import LogisticRegression, SGDClassifier
 from sklearn.svm import SVC, LinearSVC
 
-from sklearn.metrics import confusion_matrix
-from sklearn.metrics import accuracy_score
-
+from sklearn.metrics import accuracy_score, confusion_matrix
 from IPython.display import display, HTML
 
-from sklearn.pipeline import Pipeline
+from sklearn.pipeline import make_pipeline, Pipeline
+from sklearn.model_selection import train_test_split, GridSearchCV, KFold
 
-from sklearn.pipeline import make_pipeline
 from sklearn.naive_bayes import MultinomialNB
-from sklearn.preprocessing import Binarizer
 
-from sklearn.preprocessing import StandardScaler
-
-from sklearn.model_selection import GridSearchCV
-
-from sklearn.model_selection import train_test_split
 
 get_ipython().run_line_magic('matplotlib', 'inline')
 
 
-# In[2]:
+# # 1.a Data Preparation
+# 10 points - Deﬁne and prepare your class variables. Use proper variable 
+# representations (int, ﬂoat, one-hot, etc.). Use pre-processing methods (as needed) for
+# dimensionality reduction, scaling, etc. Remove variables that are not needed/useful for 
+# the analysis.
+
+# # 1.b Data Preparation
+# 5 points - Describe the final dataset that is used for classification/regression (include a description of any newly formed variables you created).
+
+# In[10]:
 
 
 # The 2017 Public Schools Machine Learning 
@@ -76,13 +78,39 @@ get_ipython().run_line_magic('matplotlib', 'inline')
 # name space size
 # Load Full Public School Data Frames for each year
 
-school_data = pd.read_csv('../Data/2017/Machine Learning Datasets/PublicSchools2017_ML.csv', low_memory=False)
+school_data_14 = pd.read_csv('../Data/2014/Machine Learning Datasets/PublicSchools2014_ML.csv', low_memory=False)
+school_data_15 = pd.read_csv('../Data/2015/Machine Learning Datasets/PublicSchools2015_ML.csv', low_memory=False)
+school_data_16 = pd.read_csv('../Data/2016/Machine Learning Datasets/PublicSchools2016_ML.csv', low_memory=False)
+school_data_17 = pd.read_csv('../Data/2017/Machine Learning Datasets/PublicSchools2017_ML.csv', low_memory=False)
 
 
-# # Create Models
-# Create a logistic regression model and a support vector machine model for the classification task involved with your dataset. Assess how well each model performs (use 80/20 training/testing split for your data). Adjust parameters of the models to make them more accurate. If your dataset size requires the use of stochastic gradient descent, then linear kernel only is fine to use. That is, the SGDClassifier is fine to use for optimizing logistic regression and linear support vector machines. For many problems, SGD will be required in order to train the SVM model in a reasonable timeframe. 
+# In[21]:
 
-# In[3]:
+
+school_data = pd.concat([school_data_14, school_data_15, school_data_16, school_data_17],ignore_index=True, sort=True)
+
+
+# In[42]:
+
+
+imputed_school_data = school_data.apply(lambda col: col.fillna(col.median()),axis=0)
+#imputed_school_data = school_data.interpolate(method='krogh',axis=0)
+imputed_school_data.head(10)
+
+
+# In[38]:
+
+
+
+
+
+# # 2.a Modeling and Evaluation
+# 10 points - Choose and explain your evaluation metrics that you will use (i.e., accuracy, precision, recall, F-measure, or any metric we have discussed). Why are the measure(s) appropriate for analyzing the results of your modeling? Give a detailed explanation backing up any assertions.
+
+# # 2.b Modeling and Evaluation
+# 10 points - Choose the method you will use for dividing your data into training and why testing splits (i.e., are you using Stratiﬁed 10-fold cross validation? Why?). Explain why your chosen method is appropriate or use more than one method as appropriate.
+
+# In[43]:
 
 
 #split data into X and y dataframes
@@ -92,30 +120,23 @@ y = school_data[SPG_Grade_col].apply(lambda row:'A' if row.any()!=1 else
                                  row[0]*'A+NG'+row[1]*'B'+row[2]*'C'+row[3]*'D'+row[4]*'F'+row[5]*'I',axis=1)
 
 #Removed SPG Grade and unit code(which is primary key for school data table)
-
-X = school_data[school_data.columns.drop(list(school_data.filter(regex='^SPG\WGrade|unit_code')))]
-
-
-# In[4]:
+ 
+X = school_data[school_data.columns.drop(list(school_data.filter(regex='^SPG\WGrade|^SPG\WScore|unit_code')))]
 
 
-# #split X and y into test and train sets. We still want
+# In[ ]:
+
+
+# split X and y into test and train sets. We still want
 # to do this for external Cross Validation
 
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=.2)
 
 
-# # Training of the model
-# 
-# Here we are training the logistic regression, SVM, and SGDClassifier models. We are using 10 k-fold internal cross validation to train and test our model. A simple pipeline was created which and then grid search was used for parameter selection. The pipeline has 3 main steps:
-# 1. dimension reduction
-# 2. observation scaling
-# 3. classification
-# 
-# The grid search will try the following parameters for each of the 3 steps:
-# 1. dimension reduction - None, NMF
+# # 2.c Modeling and Evaluation
+# 20 points - Create three different classification/regression models (e.g., random forest, KNN, and SVM). Two modeling techniques must be new (but the third could be SVM or logistic regression). Adjust parameters as appropriate to increase generalization performance using your chosen metric.
 
-# In[5]:
+# In[4]:
 
 
 # Here we establish a basic 10 k-fold internal
@@ -132,84 +153,60 @@ k_fold = KFold(n_splits=10,shuffle=True)
 pipe = Pipeline([('reduce_dim', NMF()),
                   ('scale', StandardScaler()), 
                   ('clf', LogisticRegression())])
-PCA()
 
 
-# In[6]:
+# In[ ]:
 
 
 # #Don't run this unless you want to retrain the data.
 
-# Here we are establishing the basic testing criteria
-# for our pipeline. This will run through a number of
-# parameters for our pipeline, including type of dimensionality
-# reduction, number of features to reduce, scaling (yes/no), 
-# classification models, and parameters of the classification model.
+# # Here we are establishing the basic testing criteria
+# # for our pipeline. This will run through a number of
+# # parameters for our pipeline, including type of dimensionality
+# # reduction, number of features to reduce, scaling (yes/no), 
+# # classification models, and parameters of the classification model.
 
 # param_grid = [
 #     {
-#         'reduce_dim': [None],
-#         'scale':[None,StandardScaler()],
-#         'clf':[SVC(),LogisticRegression()],
-#         'clf__C': C_OPTIONS
-#     },
-#     {
-#         'reduce_dim': [None],
-#         'scale':[None,StandardScaler()],
-#         'clf':[SGDClassifier(tol=1e-3,max_iter=1000)],
-#         'clf__alpha': C_OPTIONS
-#     },
-#     {
-#         'reduce_dim': [NMF()],
+#         'reduce_dim': [NMF(), PCA(),TSNE()],
 #         'reduce_dim__n_components': N_FEATURES_OPTIONS,
 #         'scale':[None,StandardScaler()],
 #         'clf':[SVC(),LogisticRegression()],
 #         'clf__C': C_OPTIONS
 #     },
 #     {
-#         'reduce_dim': [NMF()],
+#         'reduce_dim': [NMF(), PCA(),TSNE()],
 #         'reduce_dim__n_components': N_FEATURES_OPTIONS,
 #         'scale':[None,StandardScaler()],
 #         'clf':[SGDClassifier(tol=1e-3,max_iter=1000)],
 #         'clf__alpha': C_OPTIONS
-#     },
-#     {
-#         'reduce_dim': [SelectKBest(chi2)],
-#         'reduce_dim__k': N_FEATURES_OPTIONS,
-#         'scale':[None,StandardScaler()],
-#         'clf':[SVC(),LogisticRegression()],
-#         'clf__C': C_OPTIONS
-#     },
-#     {
-#         'reduce_dim': [SelectKBest(chi2)],
-#         'reduce_dim__k': N_FEATURES_OPTIONS,
-#         'scale':[None,StandardScaler()],
-#         'clf':[SGDClassifier(tol=1e-3,max_iter=1000)],
-#         'clf__alpha': C_OPTIONS
-#     },   
+#     }
 # ]
 
 
-# This will test the parameter dict against our 
-# pipeline
+# # This will test the parameter dict against our 
+# # pipeline
 
 # grid_search = GridSearchCV(pipe, param_grid=param_grid, cv=k_fold,n_jobs=-1, verbose=1 )
 
 
-# Here we are training the model, this is 
-# what takes the most amount of time to run
+# # Here we are training the model, this is 
+# # what takes the most amount of time to run
 # grid_search.fit(X_train, y_train)
 
 
-#This saves the grid_search variable
-# to an external file so we don't have to 
-# keep running the gridsearch
+# #This saves the grid_search variable
+# # to an external file so we don't have to 
+# # keep running the gridsearch
 
 # from sklearn.externals import joblib
 # joblib.dump(grid_search, 'savedBestModel.pkl')
 
 
-# In[7]:
+# # 2.d Modeling and Evaluation
+# 10 points - Analyze the results using your chosen method of evaluation. Use visualizations of the results to bolster the analysis. Explain any visuals and analyze why they are interesting to someone that might use this model.
+
+# In[5]:
 
 
 #Run this to load the model from the save file
@@ -228,7 +225,7 @@ params = np.array(grid_search.cv_results_['params'])
 mean_scores = np.array(grid_search.cv_results_['mean_test_score'])
 
 
-# In[8]:
+# In[6]:
 
 
 # Assigns all models to an array
@@ -262,12 +259,12 @@ display(classifier_temp.transpose())
 classifier_temp.plot(logx=True,ylim=(0,1),figsize=(14,10),title='Accuracy by Classifier'); 
 
 
-# In[9]:
+# In[7]:
 
 
 # Assigns all reduction models to an array
 
-reduce_labels=['NMF','SelectKBest']
+reduce_labels=['NMF','PCA','SelectKBest']
 
 
 # Translates the N Features array
@@ -314,7 +311,7 @@ display(reduce_temp.transpose())
 reduce_temp.plot(kind='bar',ylim=(0,1),figsize=(14,10),title='Accuracy by Feature Selection',rot=0);           
 
 
-# In[10]:
+# In[ ]:
 
 
 print('The Index of the best model is',grid_search.best_index_)
@@ -323,117 +320,17 @@ display(grid_search.best_params_)
 print('The accuracy of the best model is',round(grid_search.best_score_*100,4))
 
 
-# # Model Advantages
-# Discuss the advantages of each model for each classification task. Does one type of model offer superior performance over another in terms of prediction accuracy? In terms of training time or efficiency? Explain in detail.
+# # 2.e Modeling and Evaluation
+# 10 points - Discuss the advantages of each model for each classification task, if any. If there are not advantages, explain why. Is any model better than another? Is the difference signiﬁcant with 95% conﬁdence? Use proper statistical comparison methods.
 
-# Looking at the accuracy of the two models there are a couple of obvious observations.
-# 
-# 1. SVM is negatively to non-standardized observations.
-# 2. Logistic Regression ...
+# # 2.f Modeling and Evaluation
+# 10 points - Which attributes from your analysis are most important? Use proper methods discussed in class to evaluate the importance of different attributes. Discuss the results and hypothesize about why certain attributes are more important than others for a given classiﬁcation task.
 
-# # Interpret Feature Importance
-# Use the weights from logistic regression to interpret the importance of different features for the classification task. Explain your interpretation in detail. Why do you think some variables are more important?
-# 
+# # Deployment
+# 5 points - How useful is yolur model for interested parties (i.e., the companies or organizations that might want to use it for prediction)? How would you measure the model's value if it was used by these parties? How would your deploy your model for interested parties? What other data should be collected? How often would the model need to be updated, etc.?
 
-# In[14]:
-
-
-best_score=0
-ind = 0
-
-
-# Figure out the index of the best 
-# model based on LogisticRegression
-
-for index, (param, score) in enumerate(zip(params, mean_scores)):
-    # Uses split to get the first part of the 
-    # clf dict, which is the classifier used
-    class_state = str(param['clf']).split('(')[0]
-    if class_state == 'LogisticRegression' and score>best_score:
-        best_score=score
-        ind=index
-
-# Sets parameters to the best found with
-# the index
-
-pipe.set_params(**grid_search.cv_results_['params'][ind])
-pipe.fit(X_train,y_train)
-
-#Gets the predicted coefficients for the pipeline
-
-coef = pipe.steps[2][1].coef_
-
-#Creates a boolean mask based on the Kbest selection
-mask = pipe.steps[0][1].get_support()
-new_features= []
-
-#Creates a list of names from the columns of the original dataset
-feature_names = list(X.columns.values)
-
-for bool, feature in zip(mask, feature_names):
-    if bool:
-        new_features.append(feature)
-
-#Creates a new dataframe with the coefficients and the 
-predicted_data = pd.DataFrame(coef, columns=new_features)
-
-# Predicts the prediction of the y test
-y_pred = pipe.predict(X_test)
-
-# Assigns the accuracy of the external cross validation 
-accuracy = accuracy_score(y_test,y_pred)
-
-
-print('The accuracy of the best Logistic Regression is',round(accuracy*100,4))
-        
-#Add the square of every column together to get the most influential predictors
-sum1 = predicted_data.apply(lambda row: (row**2).sum(),axis=0)
-#sum2 = predicted_data.apply(lambda row: abs(row).sum(),axis=0)
-
-print("The top 10 features that influence SPG Grade are the following")
-
-display(sum1.sort_values(ascending=False)[0:20])
-
-
-# # Interpret Support Vectors
-# Look at the chosen support vectors for the classification task. Do these provide any insight into the data? Explain. If you used stochastic gradient descent (and therefore did not explicitly solve for support vectors), try subsampling your data to train the SVC model— then analyze the support vectors from the subsampled dataset.
-
-# In[58]:
-
-
-#This will search for the best logistic regression model from the previously run grid search
-
-best_score=0
-ind = 0
-
-
-# Figure out the index of the best 
-# model based on SVM
-
-for index, (param, score) in enumerate(zip(params, mean_scores)):
-    # Uses split to get the first part of the 
-    # clf dict, which is the classifier used
-    class_state = str(param['clf']).split('(')[0]
-    if class_state == 'SVC' and score>best_score:
-        best_score=score
-        ind=index
-
-# Sets parameters to the best found with
-# the index
-
-pipe.set_params(**grid_search.cv_results_['params'][ind])
-pipe.fit(X_train,y_train)
-
-
-# Predicts the prediction of the y test
-
-y_pred = pipe.predict(X_test)
-
-# Assigns the accuracy of the external cross validation 
-
-accuracy = accuracy_score(y_test,y_pred)
-
-
-print('The accuracy of the best SVM is',round(accuracy*100,4))
-        
-
+# # Exceptional Work
+# 10 points - You have free reign to provide additional modeling. 
+# One idea: grid search parameters in a parallelized fashion and visualize the 
+# performances across attributes. Which parameters are most signiﬁcant for making a 
+# good model for each classiﬁcation algorithm?
