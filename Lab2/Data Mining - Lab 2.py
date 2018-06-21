@@ -12,20 +12,22 @@
 # <br> Michael Toolin
 # <br> Steven Millett
 
-# In[1]:
+# In[12]:
 
 
 #Set global variables
+#Variables for file and school informaiton
+
+YEARS = ['2014', '2015', '2016', '2017']
+SCHOOLS = ['High','Middle','Elementary']
+
 #Number of features we will be selecting for feature selection
 
 N_FEATURES_OPTIONS = [2, 25 , 50]
 
-
 #Alpha and C we will be using for our classifiers
 
 C_OPTIONS = [1e-2, 1e-1, 1e0, 1e1, 1e2]
-
-YEARS = [2014, 2015, 2016, 2017]
 
 #Import data all necessary libraries we will be using in our estimation
 
@@ -70,7 +72,7 @@ get_ipython().run_line_magic('matplotlib', 'inline')
 # # 1.b Data Preparation
 # 5 points - Describe the final dataset that is used for classification/regression (include a description of any newly formed variables you created).
 
-# In[10]:
+# In[23]:
 
 
 # The 2017 Public Schools Machine Learning 
@@ -82,31 +84,32 @@ get_ipython().run_line_magic('matplotlib', 'inline')
 school_data = pd.DataFrame()
 
 for year in YEARS:
+    #Load public school master file
     temp_year = pd.read_csv('../Data/'+str(year)+'/Machine Learning Datasets/PublicSchools'+str(year)+'_ML.csv', low_memory=False)
-    hs_temp_year = pd.read_csv('../Data/'+str(year)+'/Machine Learning Datasets/PublicHighSchools'+str(year)+'_ML.csv', low_memory=False)
-    cols_to_use = hs_temp_year.columns.difference(temp_year.columns)
-    cols_to_use = np.append(cols_to_use,'unit_code')
-    print(cols_to_use[0:20])
-    temp_year = pd.merge(temp_year, hs_temp_year[cols_to_use],left_index=True, right_index=True, on='unit_code',how='left' )
-    temp_year['Year']=year
     
-    temp_year = pd.read_csv('../Data/'+str(year)+'/Machine Learning Datasets/PublicSchools'+str(year)+'_ML.csv', low_memory=False)
+    #Iterate through adding and merging school data based on school type
+    for grade in SCHOOLS:
+        grade_temp_year = pd.read_csv('../Data/'+year+'/Machine Learning Datasets/Public'+grade+'Schools'+year+'_ML.csv', low_memory=False)
+        cols_to_use = grade_temp_year.columns.difference(temp_year.columns)
+        cols_to_use = np.append(cols_to_use,'unit_code')
+        temp_year = pd.merge(temp_year, grade_temp_year[cols_to_use],left_index=True, right_index=True, on='unit_code',how='left' )
+    
+    #Add year column and concatonating all data together
+    temp_year['Year']=year
     school_data = pd.concat([school_data,temp_year],ignore_index=True, sort=True)
 
 
-# In[42]:
+# In[28]:
 
+
+#This is the critical threshold
 CRITICAL_NA = .75
+
+#With this we check if the column is less than 75% non-NA, if it is greater than 75% non-NA
+#We replace the NA with the median of the column, otherwise we replace the value with 0
 
 imputed_school_data = school_data.apply(lambda col: col.fillna(0) if col.count()/col.shape[0]<CRITICAL_NA else col.fillna(col.median()),axis=0)
 
-#imputed_school_data = school_data.interpolate(method='krogh',axis=0)
-#imputed_school_data.head(10)
-
-
-# In[38]:
-
-print(imputed_school_data.filter(regex=('ap')).columns)
 
 
 # # 2.a Modeling and Evaluation
@@ -115,7 +118,7 @@ print(imputed_school_data.filter(regex=('ap')).columns)
 # # 2.b Modeling and Evaluation
 # 10 points - Choose the method you will use for dividing your data into training and why testing splits (i.e., are you using Stratiﬁed 10-fold cross validation? Why?). Explain why your chosen method is appropriate or use more than one method as appropriate.
 
-# In[43]:
+# In[29]:
 
 
 #split data into X and y dataframes
@@ -129,7 +132,7 @@ y = imputed_school_data[SPG_Grade_col].apply(lambda row:'A' if row.any()!=1 else
 X = imputed_school_data[school_data.columns.drop(list(school_data.filter(regex='^SPG\WGrade|^SPG\WScore|unit_code')))]
 
 
-# In[ ]:
+# In[30]:
 
 
 # split X and y into test and train sets. We still want
@@ -141,7 +144,7 @@ X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=.2)
 # # 2.c Modeling and Evaluation
 # 20 points - Create three different classification/regression models (e.g., random forest, KNN, and SVM). Two modeling techniques must be new (but the third could be SVM or logistic regression). Adjust parameters as appropriate to increase generalization performance using your chosen metric.
 
-# In[4]:
+# In[ ]:
 
 
 # Here we establish a basic 10 k-fold internal
@@ -155,12 +158,16 @@ k_fold = KFold(n_splits=10,shuffle=True)
 # test for dementionality reduction, scaling,
 # and classification.
 
-pipe = Pipeline([('reduce_dim', NMF()),
+X_train = TSNE(n_components=2).fit_transform(X_train)
+
+pipe = Pipeline([
                   ('scale', StandardScaler()), 
                   ('clf', LogisticRegression())])
 
+pipe.fit(X_train,y_train)
 
-# In[ ]:
+
+# In[24]:
 
 
 # #Don't run this unless you want to retrain the data.
@@ -211,118 +218,118 @@ pipe = Pipeline([('reduce_dim', NMF()),
 # # 2.d Modeling and Evaluation
 # 10 points - Analyze the results using your chosen method of evaluation. Use visualizations of the results to bolster the analysis. Explain any visuals and analyze why they are interesting to someone that might use this model.
 
-# In[5]:
+# In[25]:
 
 
-#Run this to load the model from the save file
+# #Run this to load the model from the save file
 
-from sklearn.externals import joblib
-grid_search = joblib.load('savedBestModel.pkl')
-
-
-# Loads all parameters run into a dict 
-
-params = np.array(grid_search.cv_results_['params'])
+# from sklearn.externals import joblib
+# grid_search = joblib.load('savedBestModel.pkl')
 
 
-# Loads all mean test scores into an array
+# # Loads all parameters run into a dict 
 
-mean_scores = np.array(grid_search.cv_results_['mean_test_score'])
-
-
-# In[6]:
+# params = np.array(grid_search.cv_results_['params'])
 
 
-# Assigns all models to an array
+# # Loads all mean test scores into an array
 
-classifier_labels=['SVC','LogisticRegression','SGDClassifier']
-
-
-# Creates an empty dataframe that is to be
-# filled with the mean test accuracy by C global
-# variable and the different classifiers
-
-classifier_temp = pd.DataFrame(columns=classifier_labels,index=C_OPTIONS,
-                               data=np.linspace(.1,.25,num=len(C_OPTIONS)*len(classifier_labels)).reshape(len(C_OPTIONS),len(classifier_labels)))
-classifier_temp.fillna(0,inplace=True)
-
-for i, (param, score) in enumerate(zip(params, mean_scores)):
-    C = param['clf__C'] if 'clf__C' in param else param['clf__alpha']
-    class_state = str(param['clf']).split('(')[0]
-    if classifier_temp.at[C,class_state] < score:
-        classifier_temp.at[C,class_state] = score
+# mean_scores = np.array(grid_search.cv_results_['mean_test_score'])
 
 
-# Printing a grid of the best accuracies
+# In[26]:
+
+
+# # Assigns all models to an array
+
+# classifier_labels=['SVC','LogisticRegression','SGDClassifier']
+
+
+# # Creates an empty dataframe that is to be
+# # filled with the mean test accuracy by C global
+# # variable and the different classifiers
+
+# classifier_temp = pd.DataFrame(columns=classifier_labels,index=C_OPTIONS,
+#                                data=np.linspace(.1,.25,num=len(C_OPTIONS)*len(classifier_labels)).reshape(len(C_OPTIONS),len(classifier_labels)))
+# classifier_temp.fillna(0,inplace=True)
+
+# for i, (param, score) in enumerate(zip(params, mean_scores)):
+#     C = param['clf__C'] if 'clf__C' in param else param['clf__alpha']
+#     class_state = str(param['clf']).split('(')[0]
+#     if classifier_temp.at[C,class_state] < score:
+#         classifier_temp.at[C,class_state] = score
+
+
+# # Printing a grid of the best accuracies
         
-display(classifier_temp.transpose())   
+# display(classifier_temp.transpose())   
 
 
-# Print a line plot which shows the best 
-# accuracies
+# # Print a line plot which shows the best 
+# # accuracies
  
-classifier_temp.plot(logx=True,ylim=(0,1),figsize=(14,10),title='Accuracy by Classifier'); 
+# classifier_temp.plot(logx=True,ylim=(0,1),figsize=(14,10),title='Accuracy by Classifier'); 
 
 
-# In[7]:
+# In[27]:
 
 
-# Assigns all reduction models to an array
+# # Assigns all reduction models to an array
 
-reduce_labels=['NMF','PCA','SelectKBest']
-
-
-# Translates the N Features array
-# to an array full of string
-
-temp_N_FEATURES_OPTIONS = [str(r) for r in N_FEATURES_OPTIONS]
-temp_N_FEATURES_OPTIONS=temp_N_FEATURES_OPTIONS+['None']
+# reduce_labels=['NMF','PCA','SelectKBest']
 
 
-# Creates an empty dataframe that is to be
-# filled with the mean test accuracy by N Features
-# variable and the different feature reduction models
+# # Translates the N Features array
+# # to an array full of string
 
-reduce_temp = pd.DataFrame(columns=reduce_labels,index=temp_N_FEATURES_OPTIONS,
-                               data=np.linspace(.1,.25,num=len(temp_N_FEATURES_OPTIONS)*len(reduce_labels)).reshape(+len(temp_N_FEATURES_OPTIONS),len(reduce_labels)))
+# temp_N_FEATURES_OPTIONS = [str(r) for r in N_FEATURES_OPTIONS]
+# temp_N_FEATURES_OPTIONS=temp_N_FEATURES_OPTIONS+['None']
 
 
-for i, (param, score) in enumerate(zip(params, mean_scores)):
-    trigger=0
-    reduce_state = str(param['reduce_dim']).split('(')[0]
-    if 'reduce_dim__k' in param:
-        N_FEAT = str(param['reduce_dim__k'])
-        trigger=1
-    elif 'reduce_dim__n_components' in param:
-        N_FEAT = str(param['reduce_dim__n_components'])
-        trigger=1
-    else:
-        if reduce_temp.at['None','NMF'] < score:
-            reduce_temp.at['None','NMF'] = score
-            reduce_temp.at['None','SelectKBest'] = score
-    if trigger == 1:
-        if reduce_temp.at[N_FEAT,reduce_state] < score:
-            reduce_temp.at[N_FEAT,reduce_state] = score
+# # Creates an empty dataframe that is to be
+# # filled with the mean test accuracy by N Features
+# # variable and the different feature reduction models
+
+# reduce_temp = pd.DataFrame(columns=reduce_labels,index=temp_N_FEATURES_OPTIONS,
+#                                data=np.linspace(.1,.25,num=len(temp_N_FEATURES_OPTIONS)*len(reduce_labels)).reshape(+len(temp_N_FEATURES_OPTIONS),len(reduce_labels)))
+
+
+# for i, (param, score) in enumerate(zip(params, mean_scores)):
+#     trigger=0
+#     reduce_state = str(param['reduce_dim']).split('(')[0]
+#     if 'reduce_dim__k' in param:
+#         N_FEAT = str(param['reduce_dim__k'])
+#         trigger=1
+#     elif 'reduce_dim__n_components' in param:
+#         N_FEAT = str(param['reduce_dim__n_components'])
+#         trigger=1
+#     else:
+#         if reduce_temp.at['None','NMF'] < score:
+#             reduce_temp.at['None','NMF'] = score
+#             reduce_temp.at['None','SelectKBest'] = score
+#     if trigger == 1:
+#         if reduce_temp.at[N_FEAT,reduce_state] < score:
+#             reduce_temp.at[N_FEAT,reduce_state] = score
 
             
-# Printing a grid of the best accuracies
+# # Printing a grid of the best accuracies
 
-display(reduce_temp.transpose())
+# display(reduce_temp.transpose())
 
 
-# Print a bar plot which shows the best 
-# accuracies
+# # Print a bar plot which shows the best 
+# # accuracies
 
-reduce_temp.plot(kind='bar',ylim=(0,1),figsize=(14,10),title='Accuracy by Feature Selection',rot=0);           
+# reduce_temp.plot(kind='bar',ylim=(0,1),figsize=(14,10),title='Accuracy by Feature Selection',rot=0);           
 
 
 # In[ ]:
 
 
-print('The Index of the best model is',grid_search.best_index_)
-print('The parameters of the best model is')
-display(grid_search.best_params_)
-print('The accuracy of the best model is',round(grid_search.best_score_*100,4))
+# print('The Index of the best model is',grid_search.best_index_)
+# print('The parameters of the best model is')
+# display(grid_search.best_params_)
+# print('The accuracy of the best model is',round(grid_search.best_score_*100,4))
 
 
 # # 2.e Modeling and Evaluation
