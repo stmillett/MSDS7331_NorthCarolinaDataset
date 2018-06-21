@@ -25,6 +25,7 @@ N_FEATURES_OPTIONS = [2, 25 , 50]
 
 C_OPTIONS = [1e-2, 1e-1, 1e0, 1e1, 1e2]
 
+YEARS = [2014, 2015, 2016, 2017]
 
 #Import data all necessary libraries we will be using in our estimation
 
@@ -78,30 +79,34 @@ get_ipython().run_line_magic('matplotlib', 'inline')
 # name space size
 # Load Full Public School Data Frames for each year
 
-school_data_14 = pd.read_csv('../Data/2014/Machine Learning Datasets/PublicSchools2014_ML.csv', low_memory=False)
-school_data_15 = pd.read_csv('../Data/2015/Machine Learning Datasets/PublicSchools2015_ML.csv', low_memory=False)
-school_data_16 = pd.read_csv('../Data/2016/Machine Learning Datasets/PublicSchools2016_ML.csv', low_memory=False)
-school_data_17 = pd.read_csv('../Data/2017/Machine Learning Datasets/PublicSchools2017_ML.csv', low_memory=False)
+school_data = pd.DataFrame()
 
-
-# In[21]:
-
-
-school_data = pd.concat([school_data_14, school_data_15, school_data_16, school_data_17],ignore_index=True, sort=True)
+for year in YEARS:
+    temp_year = pd.read_csv('../Data/'+str(year)+'/Machine Learning Datasets/PublicSchools'+str(year)+'_ML.csv', low_memory=False)
+    hs_temp_year = pd.read_csv('../Data/'+str(year)+'/Machine Learning Datasets/PublicHighSchools'+str(year)+'_ML.csv', low_memory=False)
+    cols_to_use = hs_temp_year.columns.difference(temp_year.columns)
+    cols_to_use = np.append(cols_to_use,'unit_code')
+    print(cols_to_use[0:20])
+    temp_year = pd.merge(temp_year, hs_temp_year[cols_to_use],left_index=True, right_index=True, on='unit_code',how='left' )
+    temp_year['Year']=year
+    
+    temp_year = pd.read_csv('../Data/'+str(year)+'/Machine Learning Datasets/PublicSchools'+str(year)+'_ML.csv', low_memory=False)
+    school_data = pd.concat([school_data,temp_year],ignore_index=True, sort=True)
 
 
 # In[42]:
 
+CRITICAL_NA = .75
 
-imputed_school_data = school_data.apply(lambda col: col.fillna(col.median()),axis=0)
+imputed_school_data = school_data.apply(lambda col: col.fillna(0) if col.count()/col.shape[0]<CRITICAL_NA else col.fillna(col.median()),axis=0)
+
 #imputed_school_data = school_data.interpolate(method='krogh',axis=0)
-imputed_school_data.head(10)
+#imputed_school_data.head(10)
 
 
 # In[38]:
 
-
-
+print(imputed_school_data.filter(regex=('ap')).columns)
 
 
 # # 2.a Modeling and Evaluation
@@ -115,13 +120,13 @@ imputed_school_data.head(10)
 
 #split data into X and y dataframes
 
-SPG_Grade_col = school_data.filter(regex=('^SPG\WGrade')).columns
-y = school_data[SPG_Grade_col].apply(lambda row:'A' if row.any()!=1 else 
-                                 row[0]*'A+NG'+row[1]*'B'+row[2]*'C'+row[3]*'D'+row[4]*'F'+row[5]*'I',axis=1)
+SPG_Grade_col = imputed_school_data.filter(regex=('^SPG\WGrade')).columns
+imputed_school_data[SPG_Grade_col] = imputed_school_data[SPG_Grade_col].apply(lambda col: col.astype(int), axis=1)
+y = imputed_school_data[SPG_Grade_col].apply(lambda row:'A' if row.any()!=1 else row[0]*'A+NG'+row[1]*'B'+row[2]*'C'+row[3]*'D'+row[4]*'F'+row[5]*'I',axis=1)
 
 #Removed SPG Grade and unit code(which is primary key for school data table)
  
-X = school_data[school_data.columns.drop(list(school_data.filter(regex='^SPG\WGrade|^SPG\WScore|unit_code')))]
+X = imputed_school_data[school_data.columns.drop(list(school_data.filter(regex='^SPG\WGrade|^SPG\WScore|unit_code')))]
 
 
 # In[ ]:
